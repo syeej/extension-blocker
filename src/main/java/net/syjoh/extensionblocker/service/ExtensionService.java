@@ -89,6 +89,7 @@ public class ExtensionService {
         if (customExtensionRepository.count() >= 200) {
             throw new CustomException(ErrorCode.MAX_CUSTOM_EXTENSIONS_REACHED);
         }
+        checkExtensionExistence(name);
         CustomExtension customExtension = CustomExtension.builder().name(name).build();
         customExtensionRepository.save(customExtension);
         return CustomExtensionDTO.from(customExtension);
@@ -101,6 +102,20 @@ public class ExtensionService {
             throw new CustomException(ErrorCode.EXTENSION_NOT_FOUND);
         }
         customExtensionRepository.deleteById(id);
+    }
+    //확장자 중복 여부
+    private void checkExtensionExistence(String name) {
+        if (isFixedExtension(name) || customExtensionRepository.existsByName(name)) {
+            throw new CustomException(ErrorCode.EXTENSION_ALREADY_EXISTS);
+        }
+    }
+    private boolean isFixedExtension(String name) {
+        for (FixedExtensionType type : FixedExtensionType.values()) {
+            if (type.name().equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }
