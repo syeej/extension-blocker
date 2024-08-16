@@ -38,12 +38,11 @@ public class ExtensionController {
     }
     //고정 확장자 등록
     @PostMapping("/fixed/{type}")
-    public String updateFixedExtension(@PathVariable FixedExtensionType type,
-                                       @RequestParam boolean isBlocked,
-                                       RedirectAttributes redirectAttributes) {
+    @ResponseBody
+    public ResponseEntity<?> updateFixedExtension(@PathVariable FixedExtensionType type,
+                                       @RequestParam boolean isBlocked) {
         extensionService.updateFixedExtensionStatus(type, isBlocked);
-        redirectAttributes.addFlashAttribute("message", "udpate success");
-        return "redirect:/extensions";
+        return ResponseEntity.ok().build();
     }
     //커스텀 확장자 등록
     @PostMapping("/custom")

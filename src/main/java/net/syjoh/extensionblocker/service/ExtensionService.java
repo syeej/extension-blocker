@@ -12,6 +12,7 @@ import net.syjoh.extensionblocker.exception.CustomException;
 import net.syjoh.extensionblocker.exception.ErrorCode;
 import net.syjoh.extensionblocker.repository.CustomExtensionRepository;
 import net.syjoh.extensionblocker.repository.FixedExtensionRepository;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,15 @@ public class ExtensionService {
     // 고정 확장자 변경
     @Transactional
     public void updateFixedExtensionStatus(FixedExtensionType type, boolean isBlocked) {
-        redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(isBlocked));
+        try{
+            redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(isBlocked));
+        }catch (RedisConnectionFailureException rcfe){
+            log.error("Redis 연결 오류 ", rcfe);
+            throw new CustomException(ErrorCode.MAX_CUSTOM_EXTENSIONS_REACHED);
+        }catch (Exception e){
+            log.error("Update 고정확장자 수정 오류 :", e);
+            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     // 캐시에서 고정 확장자 조회
@@ -52,7 +61,7 @@ public class ExtensionService {
                 .collect(Collectors.toList());
     }
 
-    @Scheduled(fixedRate = 3600000) // 1시간마다 동기화
+    @Scheduled(fixedRate = 150000) // 1시간마다 동기화 3600000
     @Transactional
     public void syncRedisToDb() {
         Map<Object, Object> fixedExtensions = redisTemplate.opsForHash().entries(FIXED_EXTENSION_KEY);

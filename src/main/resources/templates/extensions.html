@@ -89,11 +89,12 @@
         url: '/extensions/fixed/' + type,
         type: 'POST',
         data: { isBlocked: isBlocked },
-        success: function(response) {
-          console.log('고정 확장자 등록 성공');
+        success: function() {
+          console.log('고정 확장자 수정 성공');
         },
         error: function(xhr, status, error) {
           console.error('실패:', error);
+          alert('고정 확장자 수정 실패');
           // 실패 시 체크박스 상태 되돌려야함.
           $('#' + type).prop('checked', !isBlocked);
           console.log('실패: ', xhr.responseText);
