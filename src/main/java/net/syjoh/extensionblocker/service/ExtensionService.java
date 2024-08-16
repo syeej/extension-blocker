@@ -1,5 +1,7 @@
 package net.syjoh.extensionblocker.service;
 
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.syjoh.extensionblocker.domain.CustomExtension;
 import net.syjoh.extensionblocker.domain.FixedExtension;
@@ -10,60 +12,55 @@ import net.syjoh.extensionblocker.exception.CustomException;
 import net.syjoh.extensionblocker.exception.ErrorCode;
 import net.syjoh.extensionblocker.repository.CustomExtensionRepository;
 import net.syjoh.extensionblocker.repository.FixedExtensionRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ExtensionService {
     private final FixedExtensionRepository fixedExtensionRepository;
     private final CustomExtensionRepository customExtensionRepository;
-    private final Map<FixedExtensionType, Boolean> fixedExtensionCache;
+    private final RedisTemplate<String, String> redisTemplate;
+    private static final String FIXED_EXTENSION_KEY = "fixedExtensions";
 
-    @Autowired
-    public ExtensionService(FixedExtensionRepository fixedExtensionRepository, CustomExtensionRepository customExtensionRepository) {
-        this.fixedExtensionRepository = fixedExtensionRepository;
-        this.customExtensionRepository = customExtensionRepository;
-        this.fixedExtensionCache = new ConcurrentHashMap<>();
-        initializeFixedExtensions();
-    }
-
-    //고정 확장자 초기화(메모리에 미리 로드하여 반복적인 DB 조회 줄임)
+    @PostConstruct
     private void initializeFixedExtensions() {
         for (FixedExtensionType type : FixedExtensionType.values()) {
             FixedExtension extension = fixedExtensionRepository.findById(type)
-                    .orElseGet(() -> {
-                        FixedExtension newExtension = FixedExtension.of(type, false);
-                        return fixedExtensionRepository.save(newExtension);
-                    });
-            fixedExtensionCache.put(type, extension.isBlocked());
+                    .orElseThrow(() -> new IllegalStateException("Not Found FixedExtension " + type));
+            redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(extension.isBlocked()));
         }
     }
-    // 고정 확장자 수정 (map만 업데이트)
+    // 고정 확장자 변경
     @Transactional
     public void updateFixedExtensionStatus(FixedExtensionType type, boolean isBlocked) {
-        fixedExtensionCache.put(type, isBlocked);
+        redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(isBlocked));
     }
+
     // 캐시에서 고정 확장자 조회
     public List<FixedExtensionDTO> getFixedExtensions() {
-        return fixedExtensionCache.entrySet().stream()
-                .map(entry -> new FixedExtensionDTO(entry.getKey().toString(), entry.getValue()))
+        Map<Object, Object> fixedExtensions = redisTemplate.opsForHash().entries(FIXED_EXTENSION_KEY);
+        return fixedExtensions.entrySet().stream()
+                .map(entry -> new FixedExtensionDTO(entry.getKey().toString(), Boolean.parseBoolean(entry.getValue().toString())))
                 .collect(Collectors.toList());
     }
-    // 주기적으로 캐시의 내용을 DB에 동기화 (50분마다 실행 fixedRate = 3000000)
-    @Scheduled(fixedRate = 300000) //지금은 5분
+
+    @Scheduled(fixedRate = 3600000) // 1시간마다 동기화
     @Transactional
-    public void syncFixedExtensionsToDb() {
-        fixedExtensionCache.forEach((type, isBlocked) -> {
+    public void syncRedisToDb() {
+        Map<Object, Object> fixedExtensions = redisTemplate.opsForHash().entries(FIXED_EXTENSION_KEY);
+        fixedExtensions.forEach((key, value) -> {
+            FixedExtensionType type = FixedExtensionType.valueOf(key.toString());
+            boolean isBlocked = Boolean.parseBoolean(value.toString());
             FixedExtension extension = fixedExtensionRepository.findById(type)
-                    .orElseGet(() -> FixedExtension.of(type, false));
+                    .orElseThrow(() -> new IllegalStateException("Not Found FixedExtension " + type));
             extension = extension.updateBlockedStatus(isBlocked);
             fixedExtensionRepository.save(extension);
         });
