@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -64,7 +63,7 @@ public class ExtensionService {
                 .collect(Collectors.toList());
     }
 
-    @Scheduled(fixedRate = 150000) // 1시간마다 동기화 3600000
+    @Scheduled(fixedRate = 3600000) // 1시간마다 동기화
     @Transactional
     public void syncRedisToDb() {
         for (FixedExtensionType type : FixedExtensionType.values()) {

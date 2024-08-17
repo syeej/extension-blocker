@@ -11,6 +11,6 @@ public class CustomExtensionDTO {
     private String name;
 
     public static CustomExtensionDTO from(CustomExtension customExtension) {
-        return new CustomExtensionDTO(customExtension.getId(), customExtension.getName());  // Custom extensions are always blocked
+        return new CustomExtensionDTO(customExtension.getId(), customExtension.getName());
     }
 }

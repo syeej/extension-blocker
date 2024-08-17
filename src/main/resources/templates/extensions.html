@@ -90,14 +90,14 @@
         type: 'POST',
         data: { isBlocked: isBlocked },
         success: function() {
-          console.log('고정 확장자 수정 성공');
+
         },
         error: function(xhr, status, error) {
-          console.error('실패:', error);
+
           alert('고정 확장자 수정 실패');
           // 실패 시 체크박스 상태 되돌려야함.
           $('#' + type).prop('checked', !isBlocked);
-          console.log('실패: ', xhr.responseText);
+
         }
       });
     }
@@ -111,7 +111,6 @@
         data: { name: name },
         dataType: 'json',
         success: function(newExtension) {
-          console.log('Server response:', newExtension);
           if (newExtension && newExtension.name) {
             var newElement = '<div class="bg-light rounded p-2 d-flex justify-content-between align-items-center">' +
                     '<span class="me-2">' + newExtension.name + '</span>' +
@@ -121,7 +120,6 @@
             $('#customExtension').val('');
             updateCustomExtensionCount(1);
           } else {
-            console.error('response:', newExtension);
           }
         },
         error: function(xhr, status, error) {
@@ -135,7 +133,7 @@
                 errorMessage = responseObj.message;
               }
             } catch (e) {
-              console.error('Error parsing response:', e);
+
             }
           }
           alert(errorMessage);
@@ -154,7 +152,7 @@
           button.closest('.d-flex').remove();
           // 카운트 업데이트
           updateCustomExtensionCount(-1);
-          console.log(response);
+
         },
         error: function(xhr) {
           alert('Failed to delete: ' + xhr.responseText);
