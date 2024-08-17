@@ -18,6 +18,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,21 +30,20 @@ public class ExtensionService {
     private final FixedExtensionRepository fixedExtensionRepository;
     private final CustomExtensionRepository customExtensionRepository;
     private final RedisTemplate<String, String> redisTemplate;
-    private static final String FIXED_EXTENSION_KEY = "fixedExtensions";
 
     @PostConstruct
     private void initializeFixedExtensions() {
         for (FixedExtensionType type : FixedExtensionType.values()) {
             FixedExtension extension = fixedExtensionRepository.findById(type)
                     .orElseThrow(() -> new IllegalStateException("Not Found FixedExtension " + type));
-            redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(extension.isBlocked()));
+            redisTemplate.opsForValue().set(type.toString(), String.valueOf(extension.isBlocked()));
         }
     }
     // 고정 확장자 변경
     @Transactional
     public void updateFixedExtensionStatus(FixedExtensionType type, boolean isBlocked) {
         try{
-            redisTemplate.opsForHash().put(FIXED_EXTENSION_KEY, type.toString(), String.valueOf(isBlocked));
+            redisTemplate.opsForValue().set(type.toString(), String.valueOf(isBlocked));
         }catch (RedisConnectionFailureException rcfe){
             log.error("Redis 연결 오류 ", rcfe);
             throw new CustomException(ErrorCode.MAX_CUSTOM_EXTENSIONS_REACHED);
@@ -55,24 +55,26 @@ public class ExtensionService {
 
     // 캐시에서 고정 확장자 조회
     public List<FixedExtensionDTO> getFixedExtensions() {
-        Map<Object, Object> fixedExtensions = redisTemplate.opsForHash().entries(FIXED_EXTENSION_KEY);
-        return fixedExtensions.entrySet().stream()
-                .map(entry -> new FixedExtensionDTO(entry.getKey().toString(), Boolean.parseBoolean(entry.getValue().toString())))
+        return Arrays.stream(FixedExtensionType.values())
+                .map(type -> {
+                    String value = redisTemplate.opsForValue().get(type.toString());
+                    boolean isBlocked = Boolean.parseBoolean(value);
+                    return new FixedExtensionDTO(type.toString(), isBlocked);
+                })
                 .collect(Collectors.toList());
     }
 
     @Scheduled(fixedRate = 150000) // 1시간마다 동기화 3600000
     @Transactional
     public void syncRedisToDb() {
-        Map<Object, Object> fixedExtensions = redisTemplate.opsForHash().entries(FIXED_EXTENSION_KEY);
-        fixedExtensions.forEach((key, value) -> {
-            FixedExtensionType type = FixedExtensionType.valueOf(key.toString());
-            boolean isBlocked = Boolean.parseBoolean(value.toString());
+        for (FixedExtensionType type : FixedExtensionType.values()) {
+            String value = redisTemplate.opsForValue().get(type.toString());
+            boolean isBlocked = Boolean.parseBoolean(value);
             FixedExtension extension = fixedExtensionRepository.findById(type)
                     .orElseThrow(() -> new IllegalStateException("Not Found FixedExtension " + type));
             extension = extension.updateBlockedStatus(isBlocked);
             fixedExtensionRepository.save(extension);
-        });
+        }
     }
 
     //커스텀 확장자 목록 조회
